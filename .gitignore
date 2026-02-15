@@ -1,0 +1,22 @@
+# Qt build artifacts
+*.o
+*.so
+*.a
+moc_*
+qrc_*
+ui_*
+Makefile
+.qmake.stash
+
+# Executable
+macsfancontrol
+
+# IDE files
+.vscode/
+.idea/
+*.user
+*.pro.user
+
+# OS files
+.DS_Store
+*~
