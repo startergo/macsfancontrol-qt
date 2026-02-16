@@ -1,4 +1,5 @@
 #include "fancontrolwidget.h"
+#include "sensordescriptions.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -193,56 +194,8 @@ void FanControlWidget::updateFanInfo(const FanInfo& info)
 
 QString FanControlWidget::getSensorDescription(const QString& label)
 {
-    // Map Apple SMC sensor codes to human-readable descriptions
-    // Based on macsfancontrol sensor mappings
-    static const QMap<QString, QString> sensorMap = {
-        // Ambient
-        {"TA0P", "Ambient"},
-
-        // CPU A
-        {"TCAC", "CPU A Core (PECI)"},
-        {"TCAD", "CPU A Diode"},
-        {"TCAG", "CPU A GPU"},
-        {"TCAH", "CPU A Heatsink"},
-        {"TCAS", "CPU A SRAM"},
-
-        // CPU B
-        {"TCBC", "CPU B Core (PECI)"},
-        {"TCBD", "CPU B Diode"},
-        {"TCBG", "CPU B GPU"},
-        {"TCBH", "CPU B Heatsink"},
-        {"TCBS", "CPU B SRAM"},
-
-        // Drive Bays
-        {"TH1P", "Drive Bay 0"},
-        {"TH2P", "Drive Bay 1"},
-        {"TH3P", "Drive Bay 2"},
-        {"TH4P", "Drive Bay 3"},
-
-        // Memory (DIMM Proximity)
-        {"TM1P", "DIMM Proximity 1"},
-        {"TM2P", "DIMM Proximity 2"},
-        {"TM3P", "DIMM Proximity 3"},
-        {"TM4P", "DIMM Proximity 4"},
-        {"TM5P", "DIMM Proximity 5"},
-        {"TM6P", "DIMM Proximity 6"},
-        {"TM7P", "DIMM Proximity 7"},
-        {"TM8P", "DIMM Proximity 8"},
-
-        // IOH (Northbridge)
-        {"TN0D", "IOH Diode"},
-        {"TN0H", "IOH Heatsink"},
-
-        // PCIe/Enclosure
-        {"Te1P", "PCIe Ambient"},
-
-        // Power Supply
-        {"Tp0C", "AC/DC Supply 1"},
-        {"Tp1C", "AC/DC Supply 2"}
-    };
-
-    // Return description if found, otherwise return the label itself
-    return sensorMap.value(label, label);
+    // Use model-specific descriptions from SensorDescriptions class
+    return SensorDescriptions::getDescription(label, macModel);
 }
 
 void FanControlWidget::setSensorList(const QVector<TempSensor>& sensors)

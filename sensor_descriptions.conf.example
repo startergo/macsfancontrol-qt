@@ -1,0 +1,25 @@
+# Custom Sensor Descriptions Configuration
+#
+# This file allows you to customize temperature sensor descriptions
+# for your specific Mac model.
+#
+# Format: SENSOR_CODE=Custom Description
+#
+# Example customizations:
+# TA0P=Room Temperature
+# TCAD=Main CPU Temperature
+# TG0D=Graphics Card Temperature
+#
+# To use this file:
+# 1. Copy it to ~/.config/macsfancontrol/sensor_descriptions.conf
+# 2. Edit the descriptions for your sensors
+# 3. Restart the application
+#
+# Sensor codes can be found in the temperature panel of the application.
+
+# Example customizations (uncomment and modify as needed):
+# TA0P=Ambient Room Temp
+# TCAC=CPU Core A
+# TCBC=CPU Core B
+# TG0D=GPU Temperature
+# TH1P=Main HDD

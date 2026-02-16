@@ -10,7 +10,8 @@ SOURCES += \
     src/smcinterface.cpp \
     src/hwmoninterface.cpp \
     src/fancontrolwidget.cpp \
-    src/temperaturepanel.cpp
+    src/temperaturepanel.cpp \
+    src/sensordescriptions.cpp
 
 # Header files
 HEADERS += \
@@ -18,7 +19,8 @@ HEADERS += \
     src/smcinterface.h \
     src/hwmoninterface.h \
     src/fancontrolwidget.h \
-    src/temperaturepanel.h
+    src/temperaturepanel.h \
+    src/sensordescriptions.h
 
 # Installation
 target.path = /usr/local/bin

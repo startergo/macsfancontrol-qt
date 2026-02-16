@@ -3,6 +3,7 @@
 #include <QTextStream>
 #include <QDir>
 #include <QtMath>
+#include <QDebug>
 
 SMCInterface::SMCInterface(QObject *parent)
     : QObject(parent)
@@ -17,6 +18,9 @@ bool SMCInterface::initialize()
         emit error("Apple SMC interface not found at " + basePath);
         return false;
     }
+
+    // Detect Mac model
+    detectMacModel();
 
     // Discover available fans and sensors
     discoverFans();
@@ -211,4 +215,32 @@ QVector<TempSensor> SMCInterface::getTemperatures()
     }
 
     return sensors;
+}
+
+void SMCInterface::detectMacModel()
+{
+    // Try to read Mac model from DMI information
+    QFile productNameFile("/sys/devices/virtual/dmi/id/product_name");
+    if (productNameFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QTextStream in(&productNameFile);
+        macModel = in.readLine().trimmed();
+        productNameFile.close();
+    }
+
+    // If that fails, try to read from board_name
+    if (macModel.isEmpty()) {
+        QFile boardNameFile("/sys/devices/virtual/dmi/id/board_name");
+        if (boardNameFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QTextStream in(&boardNameFile);
+            macModel = in.readLine().trimmed();
+            boardNameFile.close();
+        }
+    }
+
+    // Default to "Unknown" if we couldn't detect
+    if (macModel.isEmpty()) {
+        macModel = "Unknown Mac";
+    }
+
+    qDebug() << "Detected Mac model:" << macModel;
 }

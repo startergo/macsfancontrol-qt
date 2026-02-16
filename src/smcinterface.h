@@ -44,6 +44,9 @@ public:
     // Temperature operations
     QVector<TempSensor> getTemperatures();
 
+    // System information
+    QString getMacModel() const { return macModel; }
+
 signals:
     void error(const QString& message);
     void warning(const QString& message);
@@ -52,6 +55,7 @@ private:
     QString basePath = "/sys/devices/platform/applesmc.768";
     QVector<FanInfo> fans;
     QVector<TempSensor> sensors;
+    QString macModel;
 
     // Helper functions for sysfs I/O
     int readSysfsInt(const QString& path);
@@ -61,6 +65,7 @@ private:
     // Discovery functions
     void discoverFans();
     void discoverTemperatureSensors();
+    void detectMacModel();
 };
 
 #endif // SMCINTERFACE_H

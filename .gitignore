@@ -20,3 +20,4 @@ macsfancontrol
 # OS files
 .DS_Store
 *~
+.claude-helper.log

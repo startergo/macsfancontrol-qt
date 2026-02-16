@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "sensordescriptions.h"
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QScrollArea>
@@ -13,6 +14,7 @@
 #include <QLabel>
 #include <QInputDialog>
 #include <QSettings>
+#include <QStandardPaths>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
@@ -64,6 +66,11 @@ MainWindow::MainWindow(QWidget *parent)
     setupUI();
     createMenuBar();
     connectSignals();
+
+    // Load custom sensor descriptions if available
+    QString configPath = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) +
+                        "/macsfancontrol/sensor_descriptions.conf";
+    SensorDescriptions::loadCustomDescriptions(configPath);
 
     // Load saved settings
     loadSettings();
@@ -122,8 +129,10 @@ void MainWindow::setupUI()
 
     // Create fan control widgets for SMC fans
     QVector<FanInfo> smcFans = smcInterface->getFans();
+    QString macModel = smcInterface->getMacModel();
     for (const FanInfo& fan : smcFans) {
         FanControlWidget *fanWidget = new FanControlWidget(fan, this);
+        fanWidget->setMacModel(macModel);  // Set Mac model for sensor descriptions
         fanWidgets.append(fanWidget);
         fanSources.append(FAN_SOURCE_SMC);
         fanSourceIndices.append(fan.index - 1);  // SMC uses 1-based index

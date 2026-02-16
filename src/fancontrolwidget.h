@@ -26,6 +26,7 @@ public:
     void updateFanInfo(const FanInfo& info);
     void setSensorList(const QVector<TempSensor>& sensors);
     void updateSensorBasedSpeed(int currentTemp);
+    void setMacModel(const QString& model) { macModel = model; }
 
     // Settings getters
     FanMode getCurrentMode() const { return currentMode; }
@@ -55,6 +56,7 @@ private:
     int maxRPM;
     FanMode currentMode;
     int selectedSensorIndex;
+    QString macModel;
 
     // UI elements
     QLabel *labelName;
