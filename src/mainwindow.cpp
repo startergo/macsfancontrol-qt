@@ -11,6 +11,8 @@
 #include <QApplication>
 #include <QDebug>
 #include <QLabel>
+#include <QInputDialog>
+#include <QSettings>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
@@ -39,6 +41,9 @@ MainWindow::MainWindow(QWidget *parent)
     createMenuBar();
     connectSignals();
 
+    // Load saved settings
+    loadSettings();
+
     // Start update timer (1 second interval)
     updateTimer->start(1000);
 
@@ -50,6 +55,9 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    // Save current settings before exit
+    saveSettings();
+
     // Restore all fans to automatic mode on exit
     restoreAutoMode();
 }
@@ -141,6 +149,23 @@ void MainWindow::createMenuBar()
     connect(exitAction, &QAction::triggered, this, &QMainWindow::close);
     fileMenu->addAction(exitAction);
 
+    // Presets menu
+    QMenu *presetsMenu = menuBar()->addMenu("&Presets");
+
+    QAction *savePresetAction = new QAction("&Save Preset...", this);
+    savePresetAction->setShortcut(QKeySequence("Ctrl+S"));
+    connect(savePresetAction, &QAction::triggered, this, &MainWindow::savePreset);
+    presetsMenu->addAction(savePresetAction);
+
+    QAction *loadPresetAction = new QAction("&Load Preset...", this);
+    loadPresetAction->setShortcut(QKeySequence("Ctrl+L"));
+    connect(loadPresetAction, &QAction::triggered, this, &MainWindow::loadPreset);
+    presetsMenu->addAction(loadPresetAction);
+
+    QAction *deletePresetAction = new QAction("&Delete Preset...", this);
+    connect(deletePresetAction, &QAction::triggered, this, &MainWindow::deletePreset);
+    presetsMenu->addAction(deletePresetAction);
+
     // Help menu
     QMenu *helpMenu = menuBar()->addMenu("&Help");
 
@@ -154,6 +179,9 @@ void MainWindow::createMenuBar()
                          "- Real-time fan speed monitoring\n"
                          "- Manual and automatic fan control\n"
                          "- Temperature sensor monitoring\n"
+                         "- Sensor-based automatic control\n"
+                         "- Save and load presets\n"
+                         "- Settings persistence\n"
                          "- Safety enforcement (min/max RPM limits)");
     });
     helpMenu->addAction(aboutAction);
@@ -268,5 +296,219 @@ void MainWindow::updateSensorListInFanWidgets()
     // Update sensor list in each fan widget
     for (FanControlWidget* fanWidget : fanWidgets) {
         fanWidget->setSensorList(temps);
+    }
+}
+
+void MainWindow::saveSettings()
+{
+    QSettings settings("macsfancontrol", "macsfancontrol-qt");
+
+    settings.beginGroup("LastSession");
+    settings.setValue("fanCount", fanWidgets.size());
+
+    for (int i = 0; i < fanWidgets.size(); i++) {
+        settings.beginGroup(QString("Fan%1").arg(i));
+        settings.setValue("mode", static_cast<int>(fanWidgets[i]->getCurrentMode()));
+        settings.setValue("targetRPM", fanWidgets[i]->getTargetRPM());
+        settings.setValue("sensorIndex", fanWidgets[i]->getSelectedSensorIndex());
+        settings.setValue("minTemp", fanWidgets[i]->getMinTemp());
+        settings.setValue("maxTemp", fanWidgets[i]->getMaxTemp());
+        settings.endGroup();
+    }
+
+    settings.endGroup();
+    qDebug() << "Settings saved";
+}
+
+void MainWindow::loadSettings()
+{
+    QSettings settings("macsfancontrol", "macsfancontrol-qt");
+
+    settings.beginGroup("LastSession");
+    int savedFanCount = settings.value("fanCount", 0).toInt();
+
+    if (savedFanCount != fanWidgets.size()) {
+        qDebug() << "Fan count mismatch, skipping settings load";
+        settings.endGroup();
+        return;
+    }
+
+    for (int i = 0; i < fanWidgets.size(); i++) {
+        settings.beginGroup(QString("Fan%1").arg(i));
+
+        FanMode mode = static_cast<FanMode>(settings.value("mode", MODE_AUTO).toInt());
+        int targetRPM = settings.value("targetRPM", 2000).toInt();
+        int sensorIndex = settings.value("sensorIndex", -1).toInt();
+        int minTemp = settings.value("minTemp", 40).toInt();
+        int maxTemp = settings.value("maxTemp", 80).toInt();
+
+        applyFanSettings(i, mode, targetRPM, sensorIndex, minTemp, maxTemp);
+
+        settings.endGroup();
+    }
+
+    settings.endGroup();
+    qDebug() << "Settings loaded";
+}
+
+void MainWindow::savePresetToSettings(const QString& presetName)
+{
+    QSettings settings("macsfancontrol", "macsfancontrol-qt");
+
+    settings.beginGroup("Presets");
+    settings.beginGroup(presetName);
+    settings.setValue("fanCount", fanWidgets.size());
+
+    for (int i = 0; i < fanWidgets.size(); i++) {
+        settings.beginGroup(QString("Fan%1").arg(i));
+        settings.setValue("mode", static_cast<int>(fanWidgets[i]->getCurrentMode()));
+        settings.setValue("targetRPM", fanWidgets[i]->getTargetRPM());
+        settings.setValue("sensorIndex", fanWidgets[i]->getSelectedSensorIndex());
+        settings.setValue("minTemp", fanWidgets[i]->getMinTemp());
+        settings.setValue("maxTemp", fanWidgets[i]->getMaxTemp());
+        settings.endGroup();
+    }
+
+    settings.endGroup();
+    settings.endGroup();
+    qDebug() << "Preset saved:" << presetName;
+}
+
+void MainWindow::loadPresetFromSettings(const QString& presetName)
+{
+    QSettings settings("macsfancontrol", "macsfancontrol-qt");
+
+    settings.beginGroup("Presets");
+    settings.beginGroup(presetName);
+    int savedFanCount = settings.value("fanCount", 0).toInt();
+
+    if (savedFanCount != fanWidgets.size()) {
+        QMessageBox::warning(this, "Preset Error",
+                           "This preset was saved with a different fan configuration.");
+        settings.endGroup();
+        settings.endGroup();
+        return;
+    }
+
+    for (int i = 0; i < fanWidgets.size(); i++) {
+        settings.beginGroup(QString("Fan%1").arg(i));
+
+        FanMode mode = static_cast<FanMode>(settings.value("mode", MODE_AUTO).toInt());
+        int targetRPM = settings.value("targetRPM", 2000).toInt();
+        int sensorIndex = settings.value("sensorIndex", -1).toInt();
+        int minTemp = settings.value("minTemp", 40).toInt();
+        int maxTemp = settings.value("maxTemp", 80).toInt();
+
+        applyFanSettings(i, mode, targetRPM, sensorIndex, minTemp, maxTemp);
+
+        settings.endGroup();
+    }
+
+    settings.endGroup();
+    settings.endGroup();
+    qDebug() << "Preset loaded:" << presetName;
+}
+
+void MainWindow::applyFanSettings(int fanIndex, FanMode mode, int targetRPM, int sensorIndex, int minTemp, int maxTemp)
+{
+    if (fanIndex < 0 || fanIndex >= fanWidgets.size()) {
+        return;
+    }
+
+    // Apply settings to widget
+    fanWidgets[fanIndex]->setMode(mode);
+    fanWidgets[fanIndex]->setTargetRPM(targetRPM);
+
+    if (mode == MODE_SENSOR_BASED) {
+        fanWidgets[fanIndex]->setSensorBasedSettings(sensorIndex, minTemp, maxTemp);
+
+        // Update sensor-based settings
+        sensorSettings[fanIndex].enabled = true;
+        sensorSettings[fanIndex].sensorIndex = sensorIndex;
+        sensorSettings[fanIndex].minTemp = minTemp;
+        sensorSettings[fanIndex].maxTemp = maxTemp;
+    } else {
+        sensorSettings[fanIndex].enabled = false;
+    }
+
+    // Apply to SMC
+    if (mode == MODE_AUTO) {
+        smcInterface->setFanManualMode(fanIndex, false);
+    } else if (mode == MODE_MANUAL) {
+        smcInterface->setFanManualMode(fanIndex, true);
+        smcInterface->setFanSpeed(fanIndex, targetRPM);
+    } else if (mode == MODE_SENSOR_BASED) {
+        smcInterface->setFanManualMode(fanIndex, true);
+    }
+}
+
+void MainWindow::savePreset()
+{
+    bool ok;
+    QString presetName = QInputDialog::getText(this, "Save Preset",
+                                               "Enter preset name:",
+                                               QLineEdit::Normal,
+                                               "", &ok);
+
+    if (ok && !presetName.isEmpty()) {
+        savePresetToSettings(presetName);
+        statusBar()->showMessage(QString("Preset '%1' saved").arg(presetName), 3000);
+    }
+}
+
+void MainWindow::loadPreset()
+{
+    QSettings settings("macsfancontrol", "macsfancontrol-qt");
+    settings.beginGroup("Presets");
+    QStringList presets = settings.childGroups();
+    settings.endGroup();
+
+    if (presets.isEmpty()) {
+        QMessageBox::information(this, "Load Preset",
+                               "No saved presets found.\nUse 'Save Preset' to create one.");
+        return;
+    }
+
+    bool ok;
+    QString presetName = QInputDialog::getItem(this, "Load Preset",
+                                              "Select preset to load:",
+                                              presets, 0, false, &ok);
+
+    if (ok && !presetName.isEmpty()) {
+        loadPresetFromSettings(presetName);
+        statusBar()->showMessage(QString("Preset '%1' loaded").arg(presetName), 3000);
+    }
+}
+
+void MainWindow::deletePreset()
+{
+    QSettings settings("macsfancontrol", "macsfancontrol-qt");
+    settings.beginGroup("Presets");
+    QStringList presets = settings.childGroups();
+    settings.endGroup();
+
+    if (presets.isEmpty()) {
+        QMessageBox::information(this, "Delete Preset",
+                               "No saved presets found.");
+        return;
+    }
+
+    bool ok;
+    QString presetName = QInputDialog::getItem(this, "Delete Preset",
+                                              "Select preset to delete:",
+                                              presets, 0, false, &ok);
+
+    if (ok && !presetName.isEmpty()) {
+        QMessageBox::StandardButton reply = QMessageBox::question(this, "Confirm Delete",
+                                                                  QString("Delete preset '%1'?").arg(presetName),
+                                                                  QMessageBox::Yes | QMessageBox::No);
+
+        if (reply == QMessageBox::Yes) {
+            settings.beginGroup("Presets");
+            settings.remove(presetName);
+            settings.endGroup();
+            statusBar()->showMessage(QString("Preset '%1' deleted").arg(presetName), 3000);
+            qDebug() << "Preset deleted:" << presetName;
+        }
     }
 }

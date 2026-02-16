@@ -247,6 +247,12 @@ QString FanControlWidget::getSensorDescription(const QString& label)
 
 void FanControlWidget::setSensorList(const QVector<TempSensor>& sensors)
 {
+    // Save the currently selected sensor index before clearing
+    int currentSelection = comboSensor->currentData().toInt();
+
+    // Block signals to prevent triggering onSensorSettingsChanged during rebuild
+    comboSensor->blockSignals(true);
+
     comboSensor->clear();
     comboSensor->addItem("(Select sensor)", -1);
 
@@ -258,6 +264,19 @@ void FanControlWidget::setSensorList(const QVector<TempSensor>& sensors)
             .arg(sensor.temperature / 1000.0, 0, 'f', 1);
         comboSensor->addItem(displayText, sensor.index);
     }
+
+    // Restore the previous selection if it still exists
+    if (currentSelection >= 0) {
+        for (int i = 0; i < comboSensor->count(); i++) {
+            if (comboSensor->itemData(i).toInt() == currentSelection) {
+                comboSensor->setCurrentIndex(i);
+                break;
+            }
+        }
+    }
+
+    // Re-enable signals
+    comboSensor->blockSignals(false);
 }
 
 void FanControlWidget::updateSensorBasedSpeed(int currentTemp)
@@ -373,4 +392,49 @@ int FanControlWidget::calculateFanSpeed(int currentTemp, int minTemp, int maxTem
     int targetRPM = minRPM + static_cast<int>(tempRatio * (maxRPM - minRPM));
 
     return targetRPM;
+}
+
+void FanControlWidget::setMode(FanMode mode)
+{
+    currentMode = mode;
+
+    // Update radio buttons
+    switch (mode) {
+        case MODE_AUTO:
+            radioAuto->setChecked(true);
+            break;
+        case MODE_MANUAL:
+            radioManual->setChecked(true);
+            break;
+        case MODE_SENSOR_BASED:
+            radioSensorBased->setChecked(true);
+            break;
+    }
+
+    // Update UI
+    updateModeIndicator(mode);
+    updateControlsVisibility();
+}
+
+void FanControlWidget::setTargetRPM(int rpm)
+{
+    // Clamp to valid range
+    rpm = qBound(minRPM, rpm, maxRPM);
+    sliderRPM->setValue(rpm);
+    labelTargetRPM->setText(QString("%1 RPM").arg(rpm));
+}
+
+void FanControlWidget::setSensorBasedSettings(int sensorIndex, int minTemp, int maxTemp)
+{
+    selectedSensorIndex = sensorIndex;
+    spinMinTemp->setValue(minTemp);
+    spinMaxTemp->setValue(maxTemp);
+
+    // Update combo box to show the selected sensor
+    for (int i = 0; i < comboSensor->count(); i++) {
+        if (comboSensor->itemData(i).toInt() == sensorIndex) {
+            comboSensor->setCurrentIndex(i);
+            break;
+        }
+    }
 }

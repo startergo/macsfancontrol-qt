@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include <QTimer>
 #include <QVector>
+#include <QSettings>
 #include "smcinterface.h"
 #include "fancontrolwidget.h"
 #include "temperaturepanel.h"
@@ -20,6 +21,9 @@ private slots:
     void showError(const QString& message);
     void showWarning(const QString& message);
     void onSensorBasedModeChanged(int fanIndex, bool enable, int sensorIndex, int minTemp, int maxTemp);
+    void savePreset();
+    void loadPreset();
+    void deletePreset();
 
 private:
     SMCInterface *smcInterface;
@@ -41,6 +45,13 @@ private:
     void connectSignals();
     void restoreAutoMode();
     void updateSensorListInFanWidgets();
+
+    // Settings management
+    void saveSettings();
+    void loadSettings();
+    void savePresetToSettings(const QString& presetName);
+    void loadPresetFromSettings(const QString& presetName);
+    void applyFanSettings(int fanIndex, FanMode mode, int targetRPM, int sensorIndex, int minTemp, int maxTemp);
 };
 
 #endif // MAINWINDOW_H

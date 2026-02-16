@@ -27,6 +27,18 @@ public:
     void setSensorList(const QVector<TempSensor>& sensors);
     void updateSensorBasedSpeed(int currentTemp);
 
+    // Settings getters
+    FanMode getCurrentMode() const { return currentMode; }
+    int getTargetRPM() const { return sliderRPM->value(); }
+    int getSelectedSensorIndex() const { return selectedSensorIndex; }
+    int getMinTemp() const { return spinMinTemp->value(); }
+    int getMaxTemp() const { return spinMaxTemp->value(); }
+
+    // Settings setters
+    void setMode(FanMode mode);
+    void setTargetRPM(int rpm);
+    void setSensorBasedSettings(int sensorIndex, int minTemp, int maxTemp);
+
 signals:
     void manualModeRequested(int fanIndex, bool enable);
     void targetRPMChanged(int fanIndex, int rpm);
