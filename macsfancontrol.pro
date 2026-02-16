@@ -8,6 +8,7 @@ SOURCES += \
     src/main.cpp \
     src/mainwindow.cpp \
     src/smcinterface.cpp \
+    src/hwmoninterface.cpp \
     src/fancontrolwidget.cpp \
     src/temperaturepanel.cpp
 
@@ -15,6 +16,7 @@ SOURCES += \
 HEADERS += \
     src/mainwindow.h \
     src/smcinterface.h \
+    src/hwmoninterface.h \
     src/fancontrolwidget.h \
     src/temperaturepanel.h
 

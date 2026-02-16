@@ -17,23 +17,47 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
       smcInterface(new SMCInterface(this)),
+      hwmonInterface(new HWMonInterface(this)),
       tempPanel(new TemperaturePanel(this)),
       updateTimer(new QTimer(this))
 {
+    bool smcAvailable = false;
+    bool hwmonAvailable = false;
+
     // Initialize SMC interface
-    if (!smcInterface->initialize()) {
+    if (smcInterface->initialize()) {
+        smcAvailable = true;
+        qDebug() << "SMC interface initialized";
+    } else {
+        qWarning() << "SMC interface not available";
+    }
+
+    // Initialize HWMon interface
+    if (hwmonInterface->initialize()) {
+        hwmonAvailable = true;
+        qDebug() << "HWMon interface initialized";
+    } else {
+        qWarning() << "HWMon interface not available";
+    }
+
+    // Check if at least one interface is available
+    if (!smcAvailable && !hwmonAvailable) {
         QMessageBox::critical(this, "Initialization Error",
-                            "Failed to initialize Apple SMC interface.\n"
-                            "Make sure you're running on a Mac with applesmc driver loaded.");
+                            "No fan control interfaces found.\n"
+                            "Make sure you're running on compatible hardware with "
+                            "applesmc or hwmon drivers loaded.");
         QTimer::singleShot(0, qApp, &QApplication::quit);
         return;
     }
 
     // Check for write permissions
-    if (!smcInterface->hasWritePermission()) {
+    bool canWriteSMC = smcAvailable && smcInterface->hasWritePermission();
+    bool canWriteHWMon = hwmonAvailable && hwmonInterface->hasWritePermission();
+
+    if ((smcAvailable && !canWriteSMC) || (hwmonAvailable && !canWriteHWMon)) {
         QMessageBox::warning(this, "Permission Warning",
-                           "Application does not have write permissions to SMC.\n"
-                           "You will be able to monitor fans but not control them.\n"
+                           "Application does not have write permissions to all fan interfaces.\n"
+                           "You may be able to monitor some fans but not control them.\n"
                            "Run with: sudo macsfancontrol");
     }
 
@@ -64,7 +88,7 @@ MainWindow::~MainWindow()
 
 void MainWindow::setupUI()
 {
-    setWindowTitle("Mac Fan Control");
+    setWindowTitle("Fan Control");
     resize(800, 600);
 
     // Create central widget
@@ -96,22 +120,59 @@ void MainWindow::setupUI()
     fanLayout->setSpacing(10);
     fanLayout->setContentsMargins(10, 10, 10, 10);
 
-    // Create fan control widgets
-    QVector<FanInfo> fans = smcInterface->getFans();
-    for (const FanInfo& fan : fans) {
+    // Create fan control widgets for SMC fans
+    QVector<FanInfo> smcFans = smcInterface->getFans();
+    for (const FanInfo& fan : smcFans) {
         FanControlWidget *fanWidget = new FanControlWidget(fan, this);
         fanWidgets.append(fanWidget);
+        fanSources.append(FAN_SOURCE_SMC);
+        fanSourceIndices.append(fan.index - 1);  // SMC uses 1-based index
         fanLayout->addWidget(fanWidget);
 
         // Initialize sensor-based settings
         SensorBasedSettings settings = {false, -1, 40, 80};
         sensorSettings.append(settings);
 
-        // Connect fan widget signals to SMC interface
+        // Connect fan widget signals
         connect(fanWidget, &FanControlWidget::manualModeRequested,
-                smcInterface, &SMCInterface::setFanManualMode);
+                this, &MainWindow::onManualModeRequested);
         connect(fanWidget, &FanControlWidget::targetRPMChanged,
-                smcInterface, &SMCInterface::setFanSpeed);
+                this, &MainWindow::onTargetRPMChanged);
+        connect(fanWidget, &FanControlWidget::sensorBasedModeChanged,
+                this, &MainWindow::onSensorBasedModeChanged);
+    }
+
+    // Create fan control widgets for HWMon fans
+    QVector<HWMonFan> hwmonFans = hwmonInterface->getFans();
+    for (int i = 0; i < hwmonFans.size(); i++) {
+        const HWMonFan& hwFan = hwmonFans[i];
+
+        // Convert HWMonFan to FanInfo
+        FanInfo fan;
+        fan.index = fanWidgets.size() + 1;  // Sequential index
+        fan.label = hwFan.label;
+        fan.currentRPM = hwFan.currentRPM;
+        fan.targetRPM = hwFan.currentRPM;
+        fan.minRPM = hwFan.minRPM;
+        fan.maxRPM = hwFan.maxRPM;
+        fan.isManual = hwFan.isManual;
+        fan.sysfsPath = hwFan.devicePath;
+
+        FanControlWidget *fanWidget = new FanControlWidget(fan, this);
+        fanWidgets.append(fanWidget);
+        fanSources.append(FAN_SOURCE_HWMON);
+        fanSourceIndices.append(i);  // HWMon index
+        fanLayout->addWidget(fanWidget);
+
+        // Initialize sensor-based settings
+        SensorBasedSettings settings = {false, -1, 40, 80};
+        sensorSettings.append(settings);
+
+        // Connect fan widget signals
+        connect(fanWidget, &FanControlWidget::manualModeRequested,
+                this, &MainWindow::onManualModeRequested);
+        connect(fanWidget, &FanControlWidget::targetRPMChanged,
+                this, &MainWindow::onTargetRPMChanged);
         connect(fanWidget, &FanControlWidget::sensorBasedModeChanged,
                 this, &MainWindow::onSensorBasedModeChanged);
     }
@@ -173,8 +234,8 @@ void MainWindow::createMenuBar()
     connect(aboutAction, &QAction::triggered, this, [this]() {
         QMessageBox::about(this, "About Mac Fan Control",
                          "Mac Fan Control for Linux\n\n"
-                         "A Qt5 application for controlling Apple SMC fans.\n\n"
-                         "Controls fans on Mac hardware running Linux with applesmc driver.\n\n"
+                         "A Qt5 application for controlling fans on Linux.\n\n"
+                         "Supports Apple SMC fans (applesmc) and hwmon devices (AMD/NVIDIA GPUs, etc.).\n\n"
                          "Features:\n"
                          "- Real-time fan speed monitoring\n"
                          "- Manual and automatic fan control\n"
@@ -182,6 +243,7 @@ void MainWindow::createMenuBar()
                          "- Sensor-based automatic control\n"
                          "- Save and load presets\n"
                          "- Settings persistence\n"
+                         "- Support for multiple fan types (SMC + hwmon)\n"
                          "- Safety enforcement (min/max RPM limits)");
     });
     helpMenu->addAction(aboutAction);
@@ -199,12 +261,33 @@ void MainWindow::connectSignals()
 
 void MainWindow::updateSensorData()
 {
-    // Get temperature readings first
-    QVector<TempSensor> temps = smcInterface->getTemperatures();
+    // Get temperature readings from both sources
+    QVector<TempSensor> smcTemps = smcInterface->getTemperatures();
+    QVector<HWMonSensor> hwmonSensors = hwmonInterface->getTemperatures();
+
+    // Convert hwmon sensors to TempSensor format
+    QVector<TempSensor> temps = smcTemps;
+    for (const HWMonSensor& hwSensor : hwmonSensors) {
+        TempSensor sensor;
+        sensor.index = hwSensor.index;
+        sensor.label = hwSensor.label;
+        sensor.temperature = hwSensor.temperature;
+        sensor.sysfsPath = hwSensor.devicePath;
+        temps.append(sensor);
+    }
 
     // Update all fan RPMs
     for (int i = 0; i < fanWidgets.size(); i++) {
-        int rpm = smcInterface->getFanCurrentRPM(i);
+        FanSource source = fanSources[i];
+        int sourceIndex = fanSourceIndices[i];
+        int rpm = -1;
+
+        if (source == FAN_SOURCE_SMC) {
+            rpm = smcInterface->getFanCurrentRPM(sourceIndex);
+        } else if (source == FAN_SOURCE_HWMON) {
+            rpm = hwmonInterface->getFanCurrentRPM(sourceIndex);
+        }
+
         if (rpm >= 0) {  // Valid reading
             fanWidgets[i]->setCurrentRPM(rpm);
         }
@@ -264,25 +347,64 @@ void MainWindow::restoreAutoMode()
 {
     // Restore all fans to automatic mode
     for (int i = 0; i < fanWidgets.size(); i++) {
-        smcInterface->setFanManualMode(i, false);
+        FanSource source = fanSources[i];
+        int sourceIndex = fanSourceIndices[i];
+
+        if (source == FAN_SOURCE_SMC) {
+            smcInterface->setFanManualMode(sourceIndex, false);
+        } else if (source == FAN_SOURCE_HWMON) {
+            hwmonInterface->setFanManualMode(sourceIndex, false);
+        }
     }
 }
 
-void MainWindow::onSensorBasedModeChanged(int fanIndex, bool enable, int sensorIndex, int minTemp, int maxTemp)
+void MainWindow::onManualModeRequested(int fanWidgetIndex, bool enable)
 {
-    if (fanIndex < 0 || fanIndex >= sensorSettings.size()) {
+    if (fanWidgetIndex < 0 || fanWidgetIndex >= fanWidgets.size()) {
+        return;
+    }
+
+    FanSource source = fanSources[fanWidgetIndex];
+    int sourceIndex = fanSourceIndices[fanWidgetIndex];
+
+    if (source == FAN_SOURCE_SMC) {
+        smcInterface->setFanManualMode(sourceIndex, enable);
+    } else if (source == FAN_SOURCE_HWMON) {
+        hwmonInterface->setFanManualMode(sourceIndex, enable);
+    }
+}
+
+void MainWindow::onTargetRPMChanged(int fanWidgetIndex, int rpm)
+{
+    if (fanWidgetIndex < 0 || fanWidgetIndex >= fanWidgets.size()) {
+        return;
+    }
+
+    FanSource source = fanSources[fanWidgetIndex];
+    int sourceIndex = fanSourceIndices[fanWidgetIndex];
+
+    if (source == FAN_SOURCE_SMC) {
+        smcInterface->setFanSpeed(sourceIndex, rpm);
+    } else if (source == FAN_SOURCE_HWMON) {
+        hwmonInterface->setFanSpeed(sourceIndex, rpm);
+    }
+}
+
+void MainWindow::onSensorBasedModeChanged(int fanWidgetIndex, bool enable, int sensorIndex, int minTemp, int maxTemp)
+{
+    if (fanWidgetIndex < 0 || fanWidgetIndex >= sensorSettings.size()) {
         return;
     }
 
     // Update sensor-based settings
-    sensorSettings[fanIndex].enabled = enable;
-    sensorSettings[fanIndex].sensorIndex = sensorIndex;
-    sensorSettings[fanIndex].minTemp = minTemp;
-    sensorSettings[fanIndex].maxTemp = maxTemp;
+    sensorSettings[fanWidgetIndex].enabled = enable;
+    sensorSettings[fanWidgetIndex].sensorIndex = sensorIndex;
+    sensorSettings[fanWidgetIndex].minTemp = minTemp;
+    sensorSettings[fanWidgetIndex].maxTemp = maxTemp;
 
     // Log the change
     if (enable) {
-        qDebug() << "Fan" << fanIndex << "sensor-based mode enabled:"
+        qDebug() << "Fan" << fanWidgetIndex << "sensor-based mode enabled:"
                  << "sensor" << sensorIndex
                  << "temp range" << minTemp << "-" << maxTemp << "°C";
     }
@@ -290,8 +412,20 @@ void MainWindow::onSensorBasedModeChanged(int fanIndex, bool enable, int sensorI
 
 void MainWindow::updateSensorListInFanWidgets()
 {
-    // Get current temperature sensors
-    QVector<TempSensor> temps = smcInterface->getTemperatures();
+    // Get current temperature sensors from both sources
+    QVector<TempSensor> smcTemps = smcInterface->getTemperatures();
+    QVector<HWMonSensor> hwmonSensors = hwmonInterface->getTemperatures();
+
+    // Convert hwmon sensors to TempSensor format
+    QVector<TempSensor> temps = smcTemps;
+    for (const HWMonSensor& hwSensor : hwmonSensors) {
+        TempSensor sensor;
+        sensor.index = hwSensor.index;
+        sensor.label = hwSensor.label;
+        sensor.temperature = hwSensor.temperature;
+        sensor.sysfsPath = hwSensor.devicePath;
+        temps.append(sensor);
+    }
 
     // Update sensor list in each fan widget
     for (FanControlWidget* fanWidget : fanWidgets) {
@@ -415,6 +549,9 @@ void MainWindow::applyFanSettings(int fanIndex, FanMode mode, int targetRPM, int
         return;
     }
 
+    FanSource source = fanSources[fanIndex];
+    int sourceIndex = fanSourceIndices[fanIndex];
+
     // Apply settings to widget
     fanWidgets[fanIndex]->setMode(mode);
     fanWidgets[fanIndex]->setTargetRPM(targetRPM);
@@ -431,14 +568,27 @@ void MainWindow::applyFanSettings(int fanIndex, FanMode mode, int targetRPM, int
         sensorSettings[fanIndex].enabled = false;
     }
 
-    // Apply to SMC
+    // Apply to the correct interface
     if (mode == MODE_AUTO) {
-        smcInterface->setFanManualMode(fanIndex, false);
+        if (source == FAN_SOURCE_SMC) {
+            smcInterface->setFanManualMode(sourceIndex, false);
+        } else if (source == FAN_SOURCE_HWMON) {
+            hwmonInterface->setFanManualMode(sourceIndex, false);
+        }
     } else if (mode == MODE_MANUAL) {
-        smcInterface->setFanManualMode(fanIndex, true);
-        smcInterface->setFanSpeed(fanIndex, targetRPM);
+        if (source == FAN_SOURCE_SMC) {
+            smcInterface->setFanManualMode(sourceIndex, true);
+            smcInterface->setFanSpeed(sourceIndex, targetRPM);
+        } else if (source == FAN_SOURCE_HWMON) {
+            hwmonInterface->setFanManualMode(sourceIndex, true);
+            hwmonInterface->setFanSpeed(sourceIndex, targetRPM);
+        }
     } else if (mode == MODE_SENSOR_BASED) {
-        smcInterface->setFanManualMode(fanIndex, true);
+        if (source == FAN_SOURCE_SMC) {
+            smcInterface->setFanManualMode(sourceIndex, true);
+        } else if (source == FAN_SOURCE_HWMON) {
+            hwmonInterface->setFanManualMode(sourceIndex, true);
+        }
     }
 }
 

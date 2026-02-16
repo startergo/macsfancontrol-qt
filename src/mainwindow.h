@@ -6,8 +6,14 @@
 #include <QVector>
 #include <QSettings>
 #include "smcinterface.h"
+#include "hwmoninterface.h"
 #include "fancontrolwidget.h"
 #include "temperaturepanel.h"
+
+enum FanSource {
+    FAN_SOURCE_SMC = 0,
+    FAN_SOURCE_HWMON = 1
+};
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -20,14 +26,19 @@ private slots:
     void updateSensorData();
     void showError(const QString& message);
     void showWarning(const QString& message);
-    void onSensorBasedModeChanged(int fanIndex, bool enable, int sensorIndex, int minTemp, int maxTemp);
+    void onManualModeRequested(int fanWidgetIndex, bool enable);
+    void onTargetRPMChanged(int fanWidgetIndex, int rpm);
+    void onSensorBasedModeChanged(int fanWidgetIndex, bool enable, int sensorIndex, int minTemp, int maxTemp);
     void savePreset();
     void loadPreset();
     void deletePreset();
 
 private:
     SMCInterface *smcInterface;
+    HWMonInterface *hwmonInterface;
     QVector<FanControlWidget*> fanWidgets;
+    QVector<FanSource> fanSources;  // Track which interface each fan belongs to
+    QVector<int> fanSourceIndices;  // Index within the source interface
     TemperaturePanel *tempPanel;
     QTimer *updateTimer;
 
