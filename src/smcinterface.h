@@ -46,6 +46,7 @@ public:
 
     // System information
     QString getMacModel() const { return macModel; }
+    QString getBasePath() const { return basePath; }
 
 signals:
     void error(const QString& message);

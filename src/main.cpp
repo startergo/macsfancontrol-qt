@@ -1,10 +1,39 @@
 #include <QApplication>
 #include <QMessageBox>
+#include <QStringList>
 #include "mainwindow.h"
 #include <unistd.h>
+#include <cstdio>
+
+// Captured debug log messages (appended by the message handler below)
+static QStringList g_debugLog;
+
+static void debugMessageHandler(QtMsgType type, const QMessageLogContext& /*context*/, const QString& msg)
+{
+    const char *prefix;
+    switch (type) {
+    case QtDebugMsg:    prefix = "[DEBUG]"; break;
+    case QtWarningMsg:  prefix = "[WARN] "; break;
+    case QtCriticalMsg: prefix = "[ERROR]"; break;
+    case QtFatalMsg:    prefix = "[FATAL]"; break;
+    default:            prefix = "[INFO] "; break;
+    }
+    g_debugLog.append(QString("%1 %2").arg(prefix, msg));
+    fprintf(stderr, "%s %s\n", prefix, msg.toLocal8Bit().constData());
+    if (type == QtFatalMsg)
+        abort();
+}
+
+// Called from MainWindow to retrieve the captured log
+QStringList getDebugLog()
+{
+    return g_debugLog;
+}
 
 int main(int argc, char *argv[])
 {
+    qInstallMessageHandler(debugMessageHandler);
+
     QApplication app(argc, argv);
 
     // Set application information

@@ -32,6 +32,7 @@ private slots:
     void savePreset();
     void loadPreset();
     void deletePreset();
+    void copyDebugLogToClipboard();
 
 private:
     SMCInterface *smcInterface;

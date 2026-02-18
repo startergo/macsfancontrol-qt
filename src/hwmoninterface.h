@@ -43,6 +43,10 @@ public:
     QVector<HWMonFan> getFans() const;
     QVector<HWMonSensor> getTemperatures() const;
 
+    // Devices whose temperature sensors are suppressed when SMC is available
+    // (fans from these devices are still scanned)
+    static const QStringList smcDuplicateDevices;
+
     int getFanCurrentRPM(int fanIndex);
     int getFanCurrentPWM(int fanIndex);
     bool setFanManualMode(int fanIndex, bool manual);
@@ -59,9 +63,6 @@ private:
     bool canWrite;
     bool smcAvailable;
     int nextSensorIndex;
-
-    // Device names whose temperature sensors are duplicated by the SMC interface
-    static const QStringList smcDuplicateDevices;
 
     void scanHWMonDevices();
     void scanFansInDevice(const QString& hwmonPath, const QString& deviceName);

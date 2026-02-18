@@ -15,6 +15,10 @@
 #include <QInputDialog>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QClipboard>
+#include <QDateTime>
+#include <QDir>
+#include <QFile>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
@@ -243,6 +247,13 @@ void MainWindow::createMenuBar()
     // Help menu
     QMenu *helpMenu = menuBar()->addMenu("&Help");
 
+    QAction *copyDebugAction = new QAction("Copy &Debug Log to Clipboard", this);
+    copyDebugAction->setShortcut(QKeySequence("Ctrl+Shift+D"));
+    connect(copyDebugAction, &QAction::triggered, this, &MainWindow::copyDebugLogToClipboard);
+    helpMenu->addAction(copyDebugAction);
+
+    helpMenu->addSeparator();
+
     QAction *aboutAction = new QAction("&About", this);
     connect(aboutAction, &QAction::triggered, this, [this]() {
         QMessageBox::about(this, "About Mac Fan Control",
@@ -354,6 +365,193 @@ void MainWindow::showWarning(const QString& message)
 
     // Log to stderr
     qWarning() << "SMC Warning:" << message;
+}
+
+void MainWindow::copyDebugLogToClipboard()
+{
+    // Forward declaration — defined in main.cpp
+    extern QStringList getDebugLog();
+
+    QStringList lines;
+    lines << "=== Mac Fan Control Debug Log ===";
+    lines << QString("Timestamp: %1").arg(QDateTime::currentDateTime().toString(Qt::ISODate));
+    lines << QString("Mac Model:  %1").arg(smcInterface->getMacModel());
+    lines << "";
+
+    // SMC fans
+    lines << "--- SMC Fans ---";
+    for (const FanInfo& fan : smcInterface->getFans()) {
+        lines << QString("  Fan %1 (%2): %3 RPM  [min:%4  max:%5  manual:%6]  path:%7")
+                     .arg(fan.index).arg(fan.label).arg(fan.currentRPM)
+                     .arg(fan.minRPM).arg(fan.maxRPM)
+                     .arg(fan.isManual ? "yes" : "no")
+                     .arg(fan.sysfsPath);
+    }
+
+    // HWMon fans
+    lines << "";
+    lines << "--- HWMon Fans ---";
+    for (const HWMonFan& fan : hwmonInterface->getFans()) {
+        lines << QString("  %1/%2: %3 RPM  [min:%4  max:%5  manual:%6]  path:%7")
+                     .arg(fan.deviceName).arg(fan.label).arg(fan.currentRPM)
+                     .arg(fan.minRPM).arg(fan.maxRPM)
+                     .arg(fan.isManual ? "yes" : "no")
+                     .arg(fan.devicePath);
+    }
+
+    // SMC temperatures (live read)
+    lines << "";
+    lines << "--- SMC Temperatures ---";
+    for (const TempSensor& sensor : smcInterface->getTemperatures()) {
+        lines << QString("  %1: %2 °C  (%3)")
+                     .arg(sensor.label, -6)
+                     .arg(sensor.temperature / 1000.0, 5, 'f', 1)
+                     .arg(sensor.sysfsPath);
+    }
+
+    // HWMon temperatures (live read)
+    lines << "";
+    lines << "--- HWMon Temperatures ---";
+    for (const HWMonSensor& sensor : hwmonInterface->getTemperatures()) {
+        lines << QString("  %1/%2: %3 °C  (%4)")
+                     .arg(sensor.deviceName).arg(sensor.label, -20)
+                     .arg(sensor.temperature / 1000.0, 5, 'f', 1)
+                     .arg(sensor.devicePath);
+    }
+
+    // Saved presets
+    lines << "";
+    lines << "--- Saved Presets ---";
+    {
+        QSettings settings("macsfancontrol", "macsfancontrol-qt");
+        settings.beginGroup("Presets");
+        QStringList presetNames = settings.childGroups();
+        if (presetNames.isEmpty()) {
+            lines << "  (none)";
+        } else {
+            auto modeStr = [](int m) -> QString {
+                switch (m) {
+                case MODE_AUTO:         return "auto";
+                case MODE_MANUAL:       return "manual";
+                case MODE_SENSOR_BASED: return "sensor-based";
+                default:                return QString("unknown(%1)").arg(m);
+                }
+            };
+            for (const QString& name : presetNames) {
+                settings.beginGroup(name);
+                int fanCount = settings.value("fanCount", 0).toInt();
+                lines << QString("  Preset: %1  (%2 fans)").arg(name).arg(fanCount);
+                for (int i = 0; i < fanCount; i++) {
+                    settings.beginGroup(QString("Fan%1").arg(i));
+                    int mode       = settings.value("mode", MODE_AUTO).toInt();
+                    int targetRPM  = settings.value("targetRPM", 0).toInt();
+                    int sensorIdx  = settings.value("sensorIndex", -1).toInt();
+                    int minTemp    = settings.value("minTemp", 0).toInt();
+                    int maxTemp    = settings.value("maxTemp", 0).toInt();
+                    QString entry  = QString("    Fan%1: mode=%2").arg(i).arg(modeStr(mode));
+                    if (mode == MODE_MANUAL)
+                        entry += QString("  targetRPM=%1").arg(targetRPM);
+                    if (mode == MODE_SENSOR_BASED)
+                        entry += QString("  sensor=%1  minTemp=%2  maxTemp=%3")
+                                     .arg(sensorIdx).arg(minTemp).arg(maxTemp);
+                    lines << entry;
+                    settings.endGroup();
+                }
+                settings.endGroup();
+            }
+        }
+        settings.endGroup();
+    }
+
+    // Application log captured since startup
+    lines << "";
+    lines << "--- Application Log ---";
+    lines << getDebugLog();
+
+    // Raw sysfs dump
+    auto readSysfsValue = [](const QString& path) -> QString {
+        QFile f(path);
+        if (!f.open(QIODevice::ReadOnly)) return "(unreadable)";
+        QString v = QString(f.readLine()).trimmed();
+        f.close();
+        return v;
+    };
+
+    lines << "";
+    lines << "=== Raw Sysfs Dump ===";
+
+    // --- hwmon devices ---
+    lines << "";
+    lines << "--- /sys/class/hwmon ---";
+    QDir hwmonDir("/sys/class/hwmon");
+    if (hwmonDir.exists()) {
+        QStringList hwmonDevs = hwmonDir.entryList(QStringList() << "hwmon*", QDir::Dirs, QDir::Name);
+        for (const QString& dev : hwmonDevs) {
+            QString devPath = "/sys/class/hwmon/" + dev;
+            QString name = readSysfsValue(devPath + "/name");
+            bool isTempDup = HWMonInterface::smcDuplicateDevices.contains(name);
+
+            lines << QString("  %1  name=%2%3")
+                         .arg(dev, -8).arg(name)
+                         .arg(isTempDup ? "  [SMC duplicate: temps suppressed, fans kept]" : "");
+
+            QDir d(devPath);
+
+            // Fan files: input, min, max, label
+            QStringList fanFiles = d.entryList(
+                QStringList() << "fan*_input" << "fan*_min" << "fan*_max" << "fan*_label",
+                QDir::Files, QDir::Name);
+            for (const QString& f : fanFiles)
+                lines << QString("    %1 = %2").arg(f, -22).arg(readSysfsValue(devPath + "/" + f));
+
+            // PWM files: value and enable mode
+            QStringList pwmFiles = d.entryList(QStringList() << "pwm*", QDir::Files, QDir::Name);
+            for (const QString& f : pwmFiles) {
+                QString val = readSysfsValue(devPath + "/" + f);
+                QString note;
+                if (f.endsWith("_enable")) {
+                    if (val == "0") note = "  (disabled)";
+                    else if (val == "1") note = "  (manual)";
+                    else if (val == "2") note = "  (auto)";
+                }
+                lines << QString("    %1 = %2%3").arg(f, -22).arg(val).arg(note);
+            }
+
+            // Temp files: input and label
+            QStringList tempFiles = d.entryList(
+                QStringList() << "temp*_input" << "temp*_label",
+                QDir::Files, QDir::Name);
+            for (const QString& f : tempFiles) {
+                QString val = readSysfsValue(devPath + "/" + f);
+                QString note = (isTempDup && f.endsWith("_input")) ? "  (suppressed)" : "";
+                lines << QString("    %1 = %2%3").arg(f, -22).arg(val).arg(note);
+            }
+
+            if (fanFiles.isEmpty() && pwmFiles.isEmpty() && tempFiles.isEmpty())
+                lines << "    (no fan/pwm/temp files)";
+        }
+    } else {
+        lines << "  /sys/class/hwmon not found";
+    }
+
+    // --- applesmc raw fan + temp count ---
+    lines << "";
+    lines << QString("--- AppSMC: %1 ---").arg(smcInterface->getBasePath());
+    QDir smcDir(smcInterface->getBasePath());
+    if (smcDir.exists()) {
+        QStringList smcFanFiles = smcDir.entryList(QStringList() << "fan*", QDir::Files, QDir::Name);
+        for (const QString& f : smcFanFiles)
+            lines << QString("  %1 = %2").arg(f, -25)
+                         .arg(readSysfsValue(smcInterface->getBasePath() + "/" + f));
+
+        int tempCount = smcDir.entryList(QStringList() << "temp*_input", QDir::Files).size();
+        lines << QString("  (%1 temp*_input files — see SMC Temperatures section above)").arg(tempCount);
+    } else {
+        lines << "  Path not found";
+    }
+
+    QApplication::clipboard()->setText(lines.join('\n'));
+    statusBar()->showMessage("Debug log copied to clipboard", 3000);
 }
 
 void MainWindow::restoreAutoMode()
