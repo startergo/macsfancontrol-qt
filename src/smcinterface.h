@@ -63,6 +63,7 @@ private:
     bool writeSysfsInt(const QString& path, int value);
 
     // Discovery functions
+    bool findBasePath();
     void discoverFans();
     void discoverTemperatureSensors();
     void detectMacModel();

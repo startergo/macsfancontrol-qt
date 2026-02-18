@@ -1,4 +1,5 @@
 #include "temperaturepanel.h"
+#include "sensordescriptions.h"
 #include <QVBoxLayout>
 #include <QFrame>
 #include <QScrollBar>
@@ -31,47 +32,6 @@ TemperaturePanel::TemperaturePanel(QWidget *parent)
     mainLayout->addWidget(scrollArea);
 }
 
-QString TemperaturePanel::getSensorDescription(const QString& label)
-{
-    // Same mapping as FanControlWidget for consistency
-    static const QMap<QString, QString> sensorMap = {
-        {"TA0P", "Ambient"},
-        {"TCAC", "CPU A Core (PECI)"},
-        {"TCAD", "CPU A Diode"},
-        {"TCAG", "CPU A GPU"},
-        {"TCAH", "CPU A Heatsink"},
-        {"TCAS", "CPU A SRAM"},
-        {"TCBC", "CPU B Core (PECI)"},
-        {"TCBD", "CPU B Diode"},
-        {"TCBG", "CPU B GPU"},
-        {"TCBH", "CPU B Heatsink"},
-        {"TCBS", "CPU B SRAM"},
-        {"TH1P", "Drive Bay 0"},
-        {"TH2P", "Drive Bay 1"},
-        {"TH3P", "Drive Bay 2"},
-        {"TH4P", "Drive Bay 3"},
-        {"TM1P", "DIMM Proximity 1"},
-        {"TM2P", "DIMM Proximity 2"},
-        {"TM3P", "DIMM Proximity 3"},
-        {"TM4P", "DIMM Proximity 4"},
-        {"TM5P", "DIMM Proximity 5"},
-        {"TM6P", "DIMM Proximity 6"},
-        {"TM7P", "DIMM Proximity 7"},
-        {"TM8P", "DIMM Proximity 8"},
-        {"TN0D", "IOH Diode"},
-        {"TN0H", "IOH Heatsink"},
-        {"Te1P", "PCIe Ambient"},
-        {"Tp0C", "AC/DC Supply 1"},
-        {"Tp1C", "AC/DC Supply 2"}
-    };
-
-    return sensorMap.value(label, "");
-}
-
-bool TemperaturePanel::hasDescription(const QString& label)
-{
-    return !getSensorDescription(label).isEmpty();
-}
 
 void TemperaturePanel::updateTemperatures(const QVector<TempSensor>& sensors)
 {
@@ -85,12 +45,7 @@ void TemperaturePanel::updateTemperatures(const QVector<TempSensor>& sensors)
             continue;
         }
 
-        // Skip sensors without descriptions
-        if (!hasDescription(sensor.label)) {
-            continue;
-        }
-
-        QString description = getSensorDescription(sensor.label);
+        QString description = SensorDescriptions::getDescription(sensor.label, macModel);
         QString tempStr = formatTemperature(sensor.temperature);
         double celsius = sensor.temperature / 1000.0;
         QColor color = getTemperatureColor(celsius);
@@ -98,7 +53,10 @@ void TemperaturePanel::updateTemperatures(const QVector<TempSensor>& sensors)
         // Create or update label if it doesn't exist
         if (!tempLabels.contains(sensor.index)) {
             // Create label row with description
-            QString labelText = QString("%1 (%2):").arg(description).arg(sensor.label);
+            // If description is the raw label (no mapping found), don't repeat it
+        QString labelText = (description == sensor.label)
+            ? sensor.label + ":"
+            : QString("%1 (%2):").arg(description).arg(sensor.label);
             QLabel *nameLabel = new QLabel(labelText, contentWidget);
             nameLabel->setStyleSheet("font-size: 11px;");
 

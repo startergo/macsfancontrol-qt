@@ -15,10 +15,17 @@ QString SensorDescriptions::getDescription(const QString& sensorLabel, const QSt
     // Get model-specific descriptions
     QMap<QString, QString> modelDescriptions;
 
-    if (macModel.contains("MacPro", Qt::CaseInsensitive)) {
-        modelDescriptions = getMacProDescriptions();
-    } else if (macModel.contains("MacBookPro", Qt::CaseInsensitive)) {
+    if (macModel.contains("MacBookPro", Qt::CaseInsensitive) ||
+        macModel.contains("MacBookAir", Qt::CaseInsensitive)) {
         modelDescriptions = getMacBookProDescriptions();
+    } else if (macModel.contains("iMacPro", Qt::CaseInsensitive)) {
+        // iMacPro must be checked before MacPro: "iMacPro1,1" contains "MacPro"
+        modelDescriptions = getiMacDescriptions();
+    } else if (macModel.contains("MacPro", Qt::CaseInsensitive)) {
+        modelDescriptions = getMacProDescriptions();
+    } else if (macModel.contains("Macmini", Qt::CaseInsensitive) ||
+               macModel.contains("Mac mini", Qt::CaseInsensitive)) {
+        modelDescriptions = getMacMiniDescriptions();
     } else if (macModel.contains("iMac", Qt::CaseInsensitive)) {
         modelDescriptions = getiMacDescriptions();
     } else {
@@ -109,7 +116,7 @@ QMap<QString, QString> SensorDescriptions::getMacProDescriptions()
 {
     QMap<QString, QString> descriptions = getDefaultDescriptions();
 
-    // CPU Temperature (supports up to 12 cores on MacPro4,1/5,1/6,1)
+    // CPU Temperature (up to 12 cores on MacPro4,1/5,1/6,1; up to 28 cores on MacPro7,1)
     descriptions["TC0C"] = "CPU Core 0";
     descriptions["TC1C"] = "CPU Core 1";
     descriptions["TC2C"] = "CPU Core 2";
@@ -238,6 +245,78 @@ QMap<QString, QString> SensorDescriptions::getMacProDescriptions()
     descriptions["PC1R"] = "CPU Rail 2 Power";
     descriptions["PCPT"] = "CPU Package Total Power";
 
+    // ── Mac Pro 7,1 (2019, Intel Xeon W, T2 chip) ────────────────────────────
+    // Xeon W supports up to 28 cores; T2 exposes additional sensors.
+    descriptions["TC10C"] = "CPU Core 10";
+    descriptions["TC11C"] = "CPU Core 11";
+    descriptions["TC12C"] = "CPU Core 12";
+    descriptions["TC13C"] = "CPU Core 13";
+    descriptions["TC14C"] = "CPU Core 14";
+    descriptions["TC15C"] = "CPU Core 15";
+    descriptions["TC16C"] = "CPU Core 16";
+    descriptions["TC17C"] = "CPU Core 17";
+    descriptions["TC18C"] = "CPU Core 18";
+    descriptions["TC19C"] = "CPU Core 19";
+    descriptions["TC20C"] = "CPU Core 20";
+    descriptions["TC21C"] = "CPU Core 21";
+    descriptions["TC22C"] = "CPU Core 22";
+    descriptions["TC23C"] = "CPU Core 23";
+    descriptions["TC24C"] = "CPU Core 24";
+    descriptions["TC25C"] = "CPU Core 25";
+    descriptions["TC26C"] = "CPU Core 26";
+    descriptions["TC27C"] = "CPU Core 27";
+    // T2 CPU sensors (shared with Mac mini 8,1 T2)
+    descriptions["TCSA"] = "CPU System Agent";
+    descriptions["TCXC"] = "CPU PECI Cross Domain";
+    descriptions["TCaP"] = "CPU Package";
+    descriptions["TIED"] = "Intel Embedded Device";
+    // Storage (T2 NVMe)
+    descriptions["TH0F"] = "NVMe Front";
+    descriptions["TH0a"] = "NVMe a";
+    descriptions["TH0b"] = "NVMe b";
+    descriptions["TH0P"] = "Storage Proximity";
+    descriptions["TS0V"] = "SSD Virtual";
+    // PCH (T2)
+    descriptions["TPCD"] = "PCH Die";
+    descriptions["TPSD"] = "PCH SD";
+    // Thunderbolt (T2)
+    descriptions["TTTD"] = "Thunderbolt TD";
+    descriptions["TTXD"] = "Thunderbolt XD";
+    // Wireless
+    descriptions["TW0P"] = "Wireless Module";
+    descriptions["TW1P"] = "Wireless Module 2";
+    descriptions["TW2P"] = "Wireless Module 3";
+    // Multiple GPU cards (up to 6 on Mac Pro 7,1)
+    descriptions["TG2D"] = "GPU 2 Diode";
+    descriptions["TG3D"] = "GPU 3 Diode";
+    descriptions["TG4D"] = "GPU 4 Diode";
+    descriptions["TG5D"] = "GPU 5 Diode";
+    descriptions["TG2P"] = "GPU 2 Proximity";
+    descriptions["TG3P"] = "GPU 3 Proximity";
+    descriptions["TG4P"] = "GPU 4 Proximity";
+    descriptions["TG5P"] = "GPU 5 Proximity";
+    descriptions["TG2T"] = "GPU 2 Die";
+    descriptions["TG3T"] = "GPU 3 Die";
+    descriptions["TG4T"] = "GPU 4 Die";
+    descriptions["TG5T"] = "GPU 5 Die";
+    // 12-slot memory (ECC RDIMM)
+    descriptions["TM2S"] = "Memory Slot 2";
+    descriptions["TM3S"] = "Memory Slot 3";
+    descriptions["TM4S"] = "Memory Slot 4";
+    descriptions["TM5S"] = "Memory Slot 5";
+    descriptions["TM6S"] = "Memory Slot 6";
+    descriptions["TM7S"] = "Memory Slot 7";
+    descriptions["TM8S"] = "Memory Slot 8";
+    descriptions["TM9S"] = "Memory Slot 9";
+    descriptions["TM10S"] = "Memory Slot 10";
+    descriptions["TM11S"] = "Memory Slot 11";
+    // Additional ambient / enclosure sensors
+    descriptions["TA3P"] = "Ambient Internal 2";
+    descriptions["TA4P"] = "Ambient Plenum";
+    // VRM / power
+    descriptions["TV0R"] = "VRM Temperature";
+    descriptions["TPMP"] = "Power Supply Proximity";
+
     return descriptions;
 }
 
@@ -247,11 +326,14 @@ QMap<QString, QString> SensorDescriptions::getMacBookProDescriptions()
 
     // Ambient
     descriptions["TA0P"] = "Ambient Proximity";
+    descriptions["TA0V"] = "Ambient Air";
     descriptions["TA1P"] = "Ambient Proximity 2";
     descriptions["TA0S"] = "Ambient Sensor";
     descriptions["TA0D"] = "Ambient Diode";
     descriptions["TA0E"] = "Ambient Enclosure";
     descriptions["TA0T"] = "Ambient Top";
+    descriptions["TaLC"] = "Ambient Left C";
+    descriptions["TaRC"] = "Ambient Right C";
     descriptions["Tals"] = "Ambient Left Side";
     descriptions["Tars"] = "Ambient Right Side";
     descriptions["Tarl"] = "Ambient Rear Left";
@@ -288,10 +370,14 @@ QMap<QString, QString> SensorDescriptions::getMacBookProDescriptions()
     descriptions["TC0G"] = "CPU Integrated GPU";
     descriptions["TCGC"] = "CPU GPU PECI";
     descriptions["TCGc"] = "CPU GPU PECI 2";
+    descriptions["TCSA"] = "CPU System Agent";
+    descriptions["TCXC"] = "CPU PECI Cross Domain";
+    descriptions["TCaP"] = "CPU Package";
     descriptions["TCAC"] = "CPU Efficiency Cores";
     descriptions["TCBC"] = "CPU Secondary Cluster";
     descriptions["TCCD"] = "CPU Cross-Domain";
     descriptions["TCSC"] = "CPU System Cluster";
+    descriptions["TIED"] = "Intel Embedded Device";
 
     // GPU Temperature (Intel/Discrete)
     descriptions["TG0D"] = "GPU Diode";
@@ -307,6 +393,7 @@ QMap<QString, QString> SensorDescriptions::getMacBookProDescriptions()
 
     // Memory
     descriptions["TM0P"] = "Memory Proximity";
+    descriptions["TM0V"] = "Memory Virtual";
     descriptions["TM0S"] = "Memory Slot 0";
     descriptions["TM1S"] = "Memory Slot 1";
     descriptions["TM8S"] = "Memory Slot 2";
@@ -328,27 +415,26 @@ QMap<QString, QString> SensorDescriptions::getMacBookProDescriptions()
     descriptions["TmCS"] = "Memory Slot C";
     descriptions["TmDS"] = "Memory Slot D";
 
-    // Thunderbolt
-    descriptions["TB0T"] = "Thunderbolt 0";
-    descriptions["TB1T"] = "Thunderbolt 1";
-    descriptions["TB2T"] = "Thunderbolt 2";
-    descriptions["TB3T"] = "Thunderbolt 3";
-
     // Heatpipes
     descriptions["Th1H"] = "Heatpipe 1";
     descriptions["Th2H"] = "Heatpipe 2";
 
-    // Hard Drive
-    descriptions["TH0P"] = "HDD Proximity";
+    // Storage (NVMe/SSD on T2, HDD on older models)
+    descriptions["TH0P"] = "Storage Proximity";
+    descriptions["TH0F"] = "NVMe Front";
+    descriptions["TH0a"] = "NVMe a";
+    descriptions["TH0b"] = "NVMe b";
     descriptions["TH0A"] = "HDD A";
     descriptions["TH0B"] = "HDD B";
     descriptions["TH0C"] = "HDD C";
+    descriptions["TS0V"] = "SSD Virtual";
 
     // Northbridge/PCH
     descriptions["TN0D"] = "Northbridge Diode";
     descriptions["TN0P"] = "Northbridge Proximity";
     descriptions["TN1P"] = "Northbridge 2";
     descriptions["TPCD"] = "PCH Die";
+    descriptions["TPSD"] = "PCH SD";
 
     // Optical Drive
     descriptions["TO0P"] = "Optical Drive";
@@ -361,8 +447,14 @@ QMap<QString, QString> SensorDescriptions::getMacBookProDescriptions()
     descriptions["Tp1P"] = "Power Supply Proximity";
     descriptions["TV0R"] = "VRM Temperature";
 
+    // Thunderbolt
+    descriptions["TTTD"] = "Thunderbolt TD";
+    descriptions["TTXD"] = "Thunderbolt XD";
+
     // Wireless
     descriptions["TW0P"] = "Wireless Module";
+    descriptions["TW1P"] = "Wireless Module 2";
+    descriptions["TW2P"] = "Wireless Module 3";
     descriptions["TW0S"] = "Wireless Sensor";
     descriptions["TWAP"] = "Wireless Alt";
 
@@ -412,6 +504,15 @@ QMap<QString, QString> SensorDescriptions::getiMacDescriptions()
     descriptions["TC7C"] = "CPU Core 7";
     descriptions["TC8C"] = "CPU Core 8";
     descriptions["TC9C"] = "CPU Core 9";
+    // iMac Pro (iMacPro1,1) supports up to 18-core Xeon W
+    descriptions["TC10C"] = "CPU Core 10";
+    descriptions["TC11C"] = "CPU Core 11";
+    descriptions["TC12C"] = "CPU Core 12";
+    descriptions["TC13C"] = "CPU Core 13";
+    descriptions["TC14C"] = "CPU Core 14";
+    descriptions["TC15C"] = "CPU Core 15";
+    descriptions["TC16C"] = "CPU Core 16";
+    descriptions["TC17C"] = "CPU Core 17";
     descriptions["TC0D"] = "CPU Diode";
     descriptions["TC0E"] = "CPU Core Average";
     descriptions["TC0F"] = "CPU Core Max";
@@ -503,3 +604,75 @@ QMap<QString, QString> SensorDescriptions::getiMacDescriptions()
 
     return descriptions;
 }
+
+QMap<QString, QString> SensorDescriptions::getMacMiniDescriptions()
+{
+    QMap<QString, QString> descriptions;
+
+    // Ambient / Airflow
+    descriptions["TA0P"] = "Ambient Proximity";
+    descriptions["TA0V"] = "Ambient Air";
+    descriptions["TA1P"] = "Ambient 2";
+    descriptions["TaLC"] = "Ambient Left C";
+    descriptions["TaRC"] = "Ambient Right C";
+
+    // CPU (Intel, up to 6-core on Mac mini 2018)
+    descriptions["TC0C"] = "CPU Core 0";
+    descriptions["TC1C"] = "CPU Core 1";
+    descriptions["TC2C"] = "CPU Core 2";
+    descriptions["TC3C"] = "CPU Core 3";
+    descriptions["TC4C"] = "CPU Core 4";
+    descriptions["TC5C"] = "CPU Core 5";
+    descriptions["TC6C"] = "CPU Core 6";
+    descriptions["TC7C"] = "CPU Core 7";
+    descriptions["TC0D"] = "CPU Diode";
+    descriptions["TC0F"] = "CPU Core Max";
+    descriptions["TC0P"] = "CPU Proximity";
+    descriptions["TCGC"] = "CPU GPU PECI";
+    descriptions["TCSA"] = "CPU System Agent";
+    descriptions["TCXC"] = "CPU PECI Cross Domain";
+    descriptions["TCaP"] = "CPU Package";
+    descriptions["TCSC"] = "CPU System Cluster";
+    descriptions["TIED"] = "Intel Embedded Device";
+
+    // GPU (Intel UHD 630)
+    descriptions["TG0D"] = "GPU Diode";
+    descriptions["TG0P"] = "GPU Proximity";
+    descriptions["TG0T"] = "GPU Die";
+
+    // Memory (SO-DIMM)
+    descriptions["TM0P"] = "Memory Proximity";
+    descriptions["TM0V"] = "Memory Virtual";
+    descriptions["TM0S"] = "Memory Slot 0";
+    descriptions["TM1S"] = "Memory Slot 1";
+
+    // Storage (NVMe / T2 SSD)
+    descriptions["TH0F"] = "NVMe Front";
+    descriptions["TH0a"] = "NVMe a";
+    descriptions["TH0b"] = "NVMe b";
+    descriptions["TH0P"] = "Storage Proximity";
+    descriptions["TS0V"] = "SSD Virtual";
+
+    // PCH / Northbridge
+    descriptions["TPCD"] = "PCH Die";
+    descriptions["TPSD"] = "PCH SD";
+    descriptions["TN0D"] = "Northbridge Diode";
+    descriptions["TN0P"] = "Northbridge Proximity";
+
+    // Thunderbolt
+    descriptions["TTTD"] = "Thunderbolt TD";
+    descriptions["TTXD"] = "Thunderbolt XD";
+
+    // Wireless
+    descriptions["TW0P"] = "Wireless Module";
+    descriptions["TW1P"] = "Wireless Module 2";
+    descriptions["TW2P"] = "Wireless Module 3";
+
+    // Power / VRM
+    descriptions["TV0R"] = "VRM Temperature";
+    descriptions["Tp0C"] = "Power Supply";
+    descriptions["Tp0P"] = "Power Supply Proximity";
+
+    return descriptions;
+}
+

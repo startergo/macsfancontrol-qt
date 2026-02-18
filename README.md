@@ -24,8 +24,10 @@ A Qt5 GUI application for controlling Apple SMC (System Management Controller) f
 # Check if applesmc driver is loaded
 lsmod | grep applesmc
 
-# Check if SMC interface is available
+# Check if SMC interface is available (traditional applesmc)
 ls /sys/devices/platform/applesmc.768/
+# Or on T2 Macs (ACPI-based applesmc)
+ls /sys/bus/acpi/devices/APP0001:00/
 
 # Check Qt5 installation
 qmake --version
@@ -162,11 +164,13 @@ Your Mac Pro has 6 fans:
 - Make sure you're running on Mac hardware
 - Check if applesmc driver is loaded: `lsmod | grep applesmc`
 - Load the driver if needed: `sudo modprobe applesmc`
+- On T2 Macs the interface is ACPI-based: check `ls /sys/bus/acpi/devices/APP0001:00/`
 
 ### "Cannot write to SMC interface"
 
 - Make sure you're running with sudo: `sudo ./macsfancontrol`
-- Check file permissions: `ls -l /sys/devices/platform/applesmc.768/fan1_manual`
+- Check file permissions (traditional): `ls -l /sys/devices/platform/applesmc.768/fan1_manual`
+- Check file permissions (T2 Mac): `ls -l /sys/bus/acpi/devices/APP0001:00/fan1_manual`
 
 ### Fans not responding to changes
 
@@ -192,13 +196,21 @@ Your Mac Pro has 6 fans:
 
 ### sysfs Interface
 
-The application reads/writes to:
-- `/sys/devices/platform/applesmc.768/fan*_input` - Current RPM (read-only)
-- `/sys/devices/platform/applesmc.768/fan*_manual` - Mode (0=auto, 1=manual)
-- `/sys/devices/platform/applesmc.768/fan*_output` - Target RPM (manual mode)
-- `/sys/devices/platform/applesmc.768/fan*_min` - Minimum safe RPM
-- `/sys/devices/platform/applesmc.768/fan*_max` - Maximum RPM
-- `/sys/devices/platform/applesmc.768/temp*_input` - Temperature sensors
+The SMC path is auto-detected at startup. On traditional Macs it uses the platform driver path; on T2 Macs it uses the ACPI path:
+
+| Mac type              | Base path                                  |
+|-----------------------|--------------------------------------------|
+| Traditional (non-T2)  | `/sys/devices/platform/applesmc.768`       |
+| T2 Mac                | `/sys/bus/acpi/devices/APP0001:00`         |
+
+Files read/written under the base path:
+
+- `fan*_input` - Current RPM (read-only)
+- `fan*_manual` - Mode (0=auto, 1=manual)
+- `fan*_output` - Target RPM (manual mode)
+- `fan*_min` - Minimum safe RPM
+- `fan*_max` - Maximum RPM
+- `temp*_input` - Temperature sensors
 
 ## Warning
 

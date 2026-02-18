@@ -10,8 +10,33 @@ SMCInterface::SMCInterface(QObject *parent)
 {
 }
 
+bool SMCInterface::findBasePath()
+{
+    // Candidate paths in order of preference
+    QStringList candidates = {
+        "/sys/devices/platform/applesmc.768",  // Traditional applesmc platform driver
+        "/sys/bus/acpi/devices/APP0001:00",    // T2 Macs (ACPI-based applesmc)
+    };
+
+    for (const QString& candidate : candidates) {
+        if (QFile::exists(candidate + "/fan1_input")) {
+            basePath = candidate;
+            qDebug() << "Found SMC interface at:" << basePath;
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool SMCInterface::initialize()
 {
+    // Auto-discover the correct sysfs path
+    if (!findBasePath()) {
+        emit error("Apple SMC interface not found. Checked platform and ACPI paths.");
+        return false;
+    }
+
     // Check if SMC path exists
     QDir smcDir(basePath);
     if (!smcDir.exists()) {

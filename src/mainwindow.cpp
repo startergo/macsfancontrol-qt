@@ -35,6 +35,7 @@ MainWindow::MainWindow(QWidget *parent)
     }
 
     // Initialize HWMon interface
+    hwmonInterface->setSmcAvailable(smcAvailable);
     if (hwmonInterface->initialize()) {
         hwmonAvailable = true;
         qDebug() << "HWMon interface initialized";
@@ -97,6 +98,9 @@ void MainWindow::setupUI()
 {
     setWindowTitle("Fan Control");
     resize(800, 600);
+
+    // Pass Mac model to temperature panel for sensor description lookup
+    tempPanel->setMacModel(smcInterface->getMacModel());
 
     // Create central widget
     QWidget *centralWidget = new QWidget(this);

@@ -38,6 +38,7 @@ public:
 
     bool initialize();
     bool hasWritePermission() const { return canWrite; }
+    void setSmcAvailable(bool available) { smcAvailable = available; }
 
     QVector<HWMonFan> getFans() const;
     QVector<HWMonSensor> getTemperatures() const;
@@ -56,7 +57,11 @@ private:
     QVector<HWMonFan> fans;
     QVector<HWMonSensor> sensors;
     bool canWrite;
+    bool smcAvailable;
     int nextSensorIndex;
+
+    // Device names whose temperature sensors are duplicated by the SMC interface
+    static const QStringList smcDuplicateDevices;
 
     void scanHWMonDevices();
     void scanFansInDevice(const QString& hwmonPath, const QString& deviceName);

@@ -15,17 +15,17 @@ public:
     explicit TemperaturePanel(QWidget *parent = nullptr);
 
     void updateTemperatures(const QVector<TempSensor>& sensors);
+    void setMacModel(const QString& model) { macModel = model; }
 
 private:
     QScrollArea *scrollArea;
     QWidget *contentWidget;
     QGridLayout *gridLayout;
     QMap<int, QLabel*> tempLabels;  // Maps sensor index to temperature label
+    QString macModel;
 
     QString formatTemperature(int millidegrees);
     QColor getTemperatureColor(double celsius);
-    QString getSensorDescription(const QString& label);
-    bool hasDescription(const QString& label);
 };
 
 #endif // TEMPERATUREPANEL_H

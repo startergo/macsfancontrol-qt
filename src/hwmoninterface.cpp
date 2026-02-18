@@ -3,9 +3,20 @@
 #include <QDirIterator>
 #include <QRegularExpression>
 
+// Devices whose temps are always provided by the SMC on Apple hardware
+const QStringList HWMonInterface::smcDuplicateDevices = {
+    "coretemp",       // CPU core temps → TC*C in SMC
+    "pch_cannonlake", // PCH temp → TPCD in SMC
+    "pch_skylake",
+    "pch_kabylake",
+    "pch_cometlake",
+    "nvme",           // NVMe temp → TH0* in SMC
+};
+
 HWMonInterface::HWMonInterface(QObject *parent)
     : QObject(parent),
       canWrite(false),
+      smcAvailable(false),
       nextSensorIndex(1000)  // Start at 1000 to avoid conflicts with SMC indices
 {
 }
@@ -63,8 +74,14 @@ void HWMonInterface::scanHWMonDevices()
 
         qDebug() << "Scanning hwmon device:" << deviceName << "at" << hwmonPath;
 
-        // Scan for fans and sensors in this device
+        // Scan for fans in all devices
         scanFansInDevice(hwmonPath, deviceName);
+
+        // Skip temperature sensors from devices already covered by the SMC interface
+        if (smcAvailable && smcDuplicateDevices.contains(deviceName)) {
+            qDebug() << "Skipping SMC-duplicate hwmon sensors from:" << deviceName;
+            continue;
+        }
         scanSensorsInDevice(hwmonPath, deviceName);
     }
 }

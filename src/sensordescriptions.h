@@ -13,6 +13,7 @@ private:
     static QMap<QString, QString> getDefaultDescriptions();
     static QMap<QString, QString> getMacProDescriptions();
     static QMap<QString, QString> getMacBookProDescriptions();
+    static QMap<QString, QString> getMacMiniDescriptions();
     static QMap<QString, QString> getiMacDescriptions();
     static QMap<QString, QString> customDescriptions;
 };
